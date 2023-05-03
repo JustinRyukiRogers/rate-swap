@@ -1,0 +1,30 @@
+[package]
+name = "rate_swaps"
+version = "0.1.0"
+edition = "2018"
+autobins = false
+autoexamples = false
+
+
+[dependencies]
+cosmwasm-std = "0.14.1"
+cosmwasm-schema = "0.14.1"
+cosmwasm-vm = "0.14.1"
+cosmwasm-storage = "0.14.1"
+serde = { version = "1.0.130", features = ["derive"] }
+serde_json = "1.0.71"
+thiserror = "1.0.32"
+schemars = "0.8.3"
+cw0 = "0.4.0"
+
+[dev-dependencies]
+cosmwasm-vm = { version = "0.14.1" }
+serde_json = "1.0.71"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+path = "src/price_oracle.rs"
+
+[features]
+default = ["library"]
+library = []
