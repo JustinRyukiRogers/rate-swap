@@ -33,11 +33,6 @@ pub struct InstantiateMsg {
     pub usdc_price: Decimal,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub enum ExecuteMsg {
-    UpdateAtomPrice { new_price: Decimal },
-    UpdateUsdcPrice { new_price: Decimal },
-}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum QueryMsg {
@@ -112,7 +107,6 @@ fn update_usdc_price(
     state.usdc_price = new_price;
     config(deps.storage).save(&state)?;
 
-    Ok(Response::new())
 }
 
 
