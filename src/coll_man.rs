@@ -25,6 +25,8 @@ pub struct State {
     pub liquidation_deadline: Expiration,
     pub liquidator: Addr,
     pub order_manager_contract: Addr,
+    pub liquidation_threshold: u64
+    pub liquidation_penalty: u64
 
 }
 
@@ -219,8 +221,8 @@ pub fn withdraw_collateral(
     amount: Uint128,
 ) -> Result<Response, StdError> {
     let atoken_hash = "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2".to_string();
-    let config = config_read(deps.storage).load()?;
-    let liquidation_threshold = config.liquidation_threshold;
+    let state = state(deps.storage).load()?;
+    let liquidation_threshold = state.liquidation_threshold;
 
     let balances = balances_read(deps.storage);
     let current_collateral = balances.load(info.sender.as_bytes())?;
@@ -401,8 +403,6 @@ pub fn liquidate_collateral(
     if info.sender != state.authorized_checker {
         return Err(StdError::generic_err("Unauthorized: only the authorized checker can call this function"));
     }
-
-    let config = read_config(deps.storage)?;
     let borrower_addr = Addr::unchecked(borrower);
 
 
@@ -410,7 +410,8 @@ pub fn liquidate_collateral(
     let loan_balance = read_loan_balance(deps.storage, &borrower_addr)?;
     let collateral_balance = read_collateral_balance(deps.storage, &borrower_addr)?;
 
-    let amount = loan_balance;
+    //Liquidation amount
+    let amount = loan_balance * state.liquidation_penalty;
 
     // Query prices for USDC and ATOM
     let prices_response = query_prices(deps.as_ref())?;
@@ -424,14 +425,14 @@ pub fn liquidate_collateral(
     let new_collateral = collateral_balance.checked_sub(amount)?;
 
     // Calculate the new collateralization ratio
-    let new_collateralization_ratio = if loan_balance == Uint128::zero() {
+    let collateralization_ratio = if loan_balance == Uint128::zero() {
         Decimal::one()
     } else {
-        Decimal::from_ratio(new_collateral, loan_balance)
+        Decimal::from_ratio(collateral_balance_usd, loan_balance)
     };
 
     // Check if the new collateralization ratio is below the liquidation threshold
-    if new_collateralization_ratio >= config.liquidation_threshold && env.block.height <= state.liquidation_deadline.at_height() {
+    if collateralization_ratio >= state.liquidation_threshold && env.block.height <= state.liquidation_deadline.at_height() {
         return Err(StdError::generic_err("LiquidationThresholdNotReached");
     }
 
@@ -500,8 +501,8 @@ fn try_withdraw_usdc(
     token_amount: Uint128,
 ) -> StdResult<Response> {
     // Verify if the current block time is past the liquidation deadline
-    let config = config.load(deps.storage)?;
-    if env.block.time < config.liquidation_deadline {
+    let state = state.load(deps.storage)?;
+    if env.block.time < state.liquidation_deadline {
         return Err(StdError::generic_err("Withdrawal is not allowed before the liquidation deadline"));
     }
     
