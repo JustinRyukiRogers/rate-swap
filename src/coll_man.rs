@@ -27,7 +27,50 @@ pub struct State {
     pub order_manager_contract: Addr,
     pub liquidation_threshold: u64
     pub liquidation_penalty: u64
+    pub fyusdc_contract: Addr,
+    pub rsp_contract: Addr,
 
+}
+
+impl State {
+    // function to update state
+    pub fn update(
+        &mut self,
+        caller: &Addr,
+        new_authorized_checker: Option<Addr>,
+        new_liquidation_deadline: Option<Expiration>,
+        new_liquidator: Option<Addr>,
+        new_order_manager_contract: Option<Addr>,
+        new_liquidation_threshold: Option<u64>,
+        new_liquidation_penalty: Option<u64>,
+        new_fyusdc_contract: Option<Addr>,
+    ) -> StdResult<()> {  
+        if caller != &self.contract_owner {
+            return Err(StdError::unauthorized());  
+        }
+        if let Some(checker) = new_authorized_checker {
+            self.authorized_checker = checker;
+        }
+        if let Some(deadline) = new_liquidation_deadline {
+            self.liquidation_deadline = deadline;
+        }
+        if let Some(liquidator) = new_liquidator {
+            self.liquidator = liquidator;
+        }
+        if let Some(manager) = new_order_manager_contract {
+            self.order_manager_contract = manager;
+        }
+        if let Some(threshold) = new_liquidation_threshold {
+            self.liquidation_threshold = threshold;
+        }
+        if let Some(penalty) = new_liquidation_penalty {
+            self.liquidation_penalty = penalty;
+        }
+        if let Some(fyusdc) = new_fyusdc_contract {
+            self.fyusdc_contract = fyusdc;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -70,14 +113,16 @@ fn save_usdc_balance(storage: &mut dyn Storage, amount: Uint128) -> StdResult<()
     CONTRACT_USDC_BALANCE.save(storage, &amount)
 }
 
-// Storage functions for fyUSDC contract
-fn fyusdc_contract(storage: &dyn Storage) -> StdResult<CanonicalAddr> {
-    CONTRACT_FYUSDC.load(storage)
+// Load the state from storage
+fn load_state(storage: &dyn Storage) -> StdResult<State> {
+    STATE.load(storage)
 }
 
-fn save_fyusdc_contract(storage: &mut dyn Storage, address: &CanonicalAddr) -> StdResult<()> {
-    CONTRACT_FYUSDC.save(storage, address)
+// Save the state in storage
+fn save_state(storage: &mut dyn Storage, state: &State) -> StdResult<()> {
+    STATE.save(storage, state)
 }
+
 
 // Constants for contract addresses storage
 const CONTRACT_FYUSDC: Item<CanonicalAddr> = Item::new("contract_fyusdc");
@@ -86,9 +131,16 @@ const CONTRACT_ORDER_MANAGER: Item<CanonicalAddr> = Item::new("contract_order_ma
 // InstantiateMsg is used when instantiating the contract
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
-    pub fyusdc_contract: Addr,
+    pub authorized_checker: Addr,
+    pub liquidation_deadline: Expiration,
+    pub liquidator: Addr,
     pub order_manager_contract: Addr,
+    pub fyusdc_contract: Addr,
+    pub liquidation_threshold: u64,
+    pub liquidation_penalty: u64,
+    pub rsp_contract: Addr
 }
+
 
 // ExecuteMsg contains the contract's messages
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -123,11 +175,17 @@ pub fn instantiate(
     msg: InstantiateMsg,
 ) -> StdResult<Response> {
     let state = State {
-        contract_owner: info.sender.to_string(),
+        contract_owner: info.sender,
         authorized_checker: deps.api.addr_validate(&msg.authorized_checker)?,
-        liquidation_deadline: Expiration::AtHeight(env.block.height + calculate_blocks_until_deadline(env.block.time)),
-        fyusdc_contract: deps.api.addr_canonicalize(&msg.fyusdc_contract)?,
-        order_manager_contract: deps.api.addr_canonicalize(&msg.order_manager_contract)?,
+        liquidation_deadline: msg.liquidation_deadline,
+        liquidator: deps.api.addr_validate(&msg.liquidator)?,
+        order_manager_contract: deps.api.addr_validate(&msg.order_manager_contract)?,
+        fyusdc_contract: deps.api.addr_validate(&msg.fyusdc_contract)?,
+        liquidation_threshold: msg.liquidation_threshold,
+        liquidation_penalty: msg.liquidation_penalty,
+        contract_usdc_balance: Uint128::zero(),
+        rsp_contract: deps.api.addr_validate(&msg.rsp_contract)?, 
+
     };
 
     // Store the state
@@ -403,13 +461,15 @@ pub fn liquidate_collateral(
     if info.sender != state.authorized_checker {
         return Err(StdError::generic_err("Unauthorized: only the authorized checker can call this function"));
     }
+    
+    let liquidator_contract_address = state.liquidator;
     let borrower_addr = Addr::unchecked(borrower);
 
 
     // Load loan and collateral balances
     let loan_balance = read_loan_balance(deps.storage, &borrower_addr)?;
     let collateral_balance = read_collateral_balance(deps.storage, &borrower_addr)?;
-
+        
     //Liquidation amount
     let amount = loan_balance * state.liquidation_penalty;
 
@@ -439,42 +499,13 @@ pub fn liquidate_collateral(
     // Update the borrower's collateral balance
     save_collateral_balance(deps.storage, &borrower_addr, new_collateral)?;
 
-    // Transfer the liquidated collateral to the liquidity pool
-    let collateral_contract_address = deps.api.addr_validate("ATOM_CONTRACT_ADDRESS")?;
-    let liquidity_pool_address = deps.api.addr_validate("LIQUIDITY_POOL_ADDRESS")?;
+    // Transfer the liquidated collateral directly to the liquidator
     let transfer_msg = ExecuteMsg::Transfer {
-        recipient: liquidity_pool_address.clone(),
+        recipient: liquidator_contract_address.clone(), // Transfer to the liquidator's address
         amount,
     };
     let transfer_response = deps.querier.execute_wasm_smart(
-        &collateral_contract_address,
-        &to_binary(&transfer_msg)?,
-        None,
-    )?;
-
-    // Perform the ATOM to USDC swap in the liquidity pool
-    let swap_msg = ExecuteMsg::Swap {
-        offer_token: collateral_contract_address.clone(),
-        offer_amount: amount,
-        ask_token: deps.api.addr_validate("USDC_CONTRACT_ADDRESS")?,
-        min_return: Uint128::zero(), // You can set a minimum return amount based on your requirements
-    };
-    let swap_response = deps.querier.execute_wasm_smart(
-        &liquidity_pool_address,
-        &to_binary(&swap_msg)?,
-        None,
-    )?;
-
-    // Transfer the swapped USDC to the liquidator's account
-    // UPDATED: Transfer the swapped USDC to the contract's account
-    let usdc_contract_address = deps.api.addr_validate("USDC_CONTRACT_ADDRESS")?;
-    let usdc_amount = swap_response.attributes[0].value.parse::<Uint128>()?;
-    let transfer_msg = ExecuteMsg::Transfer {
-        recipient: env.contract.address.clone(), // UPDATED: Transfer to the contract's address
-        amount: usdc_amount,
-    };
-    let transfer_response = deps.querier.execute_wasm_smart(
-        &usdc_contract_address,
+        &collateral_contract_address, // Use the collateral contract's address for the transfer
         &to_binary(&transfer_msg)?,
         None,
     )?;
