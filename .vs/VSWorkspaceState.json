@@ -1,9 +1,11 @@
 {
   "ExpandedNodes": [
     "",
-    "\\src",
-    "\\tests"
+    "\\Contracts",
+    "\\Contracts\\fyUSDC2\\.cargo",
+    "\\Contracts\\fyUSDC2\\src",
+    "\\src"
   ],
-  "SelectedNode": "\\src\\fyUSDC.rs",
+  "SelectedNode": "\\Contracts\\fyUSDC2",
   "PreviewInSolutionExplorer": false
 }

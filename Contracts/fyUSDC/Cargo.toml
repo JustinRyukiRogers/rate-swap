@@ -1,36 +1,33 @@
 [package]
-name = "rate_swaps"
-version = "0.1.0"
-edition = "2018"
-autobins = false
-autoexamples = false
-
-
-[dependencies]
-cosmwasm-std = {version = "1.0.0", features = ["stargate"]}
-cosmwasm-storage = "1.0.0"
-cw-storage-plus = "0.13.2"
-cw2 = "0.13.2"
-cw20 = "1.0.0"
-cw-controllers = "1.0.0"
-cw20-base = { version = "1.0.0" }
-osmo-bindings = "0.5.1"
-osmosis-std = "0.15.2"
-prost = "0.10.4"
-schemars = "0.8.8"
-serde = {version = "1.0.137", default-features = false, features = ["derive"]}
-thiserror = {version = "1.0.31"}
-
-[dev-dependencies]
-cosmwasm-schema = "1.0.0"
-cw-multi-test = "0.13.2"
-serde_json = "1.0"
-tokio = { version = "1", features = ["full"] }
+name = "cw20-base"
+version = "1.0.1"
+authors = ["Ethan Frey <ethanfrey@users.noreply.github.com>"]
+edition = "2021"
+description = "Basic implementation of a CosmWasm-20 compliant token"
+license = "Apache-2.0"
+repository = "https://github.com/CosmWasm/cw-plus"
+homepage = "https://cosmwasm.com"
+documentation = "https://docs.cosmwasm.com"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
-path = "src/fyUSDC.rs"
 
 [features]
-default = ["library"]
+backtraces = ["cosmwasm-std/backtraces"]
+# use library feature to disable all instantiate/execute/query exports
 library = []
+
+[dependencies]
+cosmwasm-schema = { version = "1.1.0" }
+cw-utils = "1.0.1"
+cw2 = { version = "1.0.1" }
+cw20 = { version = "1.0.1" }
+cw-storage-plus = "1.0.1"
+cosmwasm-std = { version = "1.1.0" }
+schemars = "0.8.1"
+semver = "1"
+serde = { version = "1.0.103", default-features = false, features = ["derive"] }
+thiserror = { version = "1.0.23" }
+
+[dev-dependencies]
+cw-multi-test = "0.16.1"
