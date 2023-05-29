@@ -2,7 +2,7 @@
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
     from_binary, to_binary, Addr, BankMsg, Binary, Deps, DepsMut, Env, MessageInfo, Response,
-    StdResult, StdError, SubMsg, WasmMsg, Uint128
+    StdResult, StdError, SubMsg, WasmMsg, Uint128, Decimal
 };
 
 use cw2::set_contract_version;
@@ -11,7 +11,7 @@ use std::collections::HashMap;
 
 use crate::error::ContractError;
 use crate::msg::{
-    CreateMsg, DetailsResponse, ExecuteMsg, InstantiateMsg, ListResponse, QueryMsg, ReceiveMsg,
+    CreateMsg, DetailsResponse, ExecuteMsg, InstantiateMsg, ListResponse, QueryMsg, ReceiveMsg, OrderbookResponse, UserOrdersResponse
 };
 use crate::state::{State, Order, OrderBucket, all_escrow_ids, Escrow, GenericBalance, ESCROWS, OrderType, STATE, ORDER_BOOK};
 
@@ -33,17 +33,23 @@ pub fn instantiate(
     };
     STATE.save(deps.storage, &state)?;
 
-    // Define price points
-    let mut price: f64 = 0.5;
-    while price <= 1.0 {
-        let price_str = format!("{:.3}", price);
+    // Define price points. Since Decimal has 18 fractional digits, we represent 0.5 as 500_000_000_000_000_000
+    let mut price: Decimal = Decimal::new(Uint128::from(500_000_000_000_000_000u128));
+    // 1.0 is represented as 1_000_000_000_000_000_000
+    let end: Decimal = Decimal::new(Uint128::from(1_000_000_000_000_000_000u128));
+    // 0.005 is represented as 5_000_000_000_000_000
+    let increment: Decimal = Decimal::new(Uint128::from(5_000_000_000_000_000u128));
+
+    while price <= end {
+        let price_str = price.to_string();
         let order_bucket = OrderBucket {
             price: price_str.clone(),
             bids: Vec::new(),
             asks: Vec::new(),
         };
         ORDER_BOOK.save(deps.storage, &price_str, &order_bucket)?;
-        price += 0.005;
+        // increment the price
+        price = price + increment;
     }
     Ok(Response::default())
 }
@@ -419,8 +425,47 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::List {} => to_binary(&query_list(deps)?),
         QueryMsg::Details { id } => to_binary(&query_details(deps, id)?),
+        QueryMsg::GetOrderbook {} => to_binary(&query_orderbook(deps)?),
+        QueryMsg::GetUserOrders { user } => to_binary(&query_user_orders(deps, user)?),
     }
 }
+
+pub fn query_orderbook(deps: Deps) -> StdResult<OrderbookResponse> {
+    // Initialize an empty vector to hold the results
+    let mut order_buckets: Vec<OrderBucket> = vec![];
+
+    // Iterate through the order book
+    for result in ORDER_BOOK.range(deps.storage, None, None, cosmwasm_std::Order::Ascending) {
+        let (_price, bucket) = result?;
+        order_buckets.push(bucket);
+    }
+
+    Ok(OrderbookResponse { order_bucket: order_buckets })
+}
+
+
+
+pub fn query_user_orders(deps: Deps, user: Addr) -> StdResult<UserOrdersResponse> {
+    // Initialize an empty vector to hold the results
+    let mut user_orders: Vec<Order> = vec![];
+
+    // Iterate through the order book
+    for result in ORDER_BOOK.range(deps.storage, None, None, cosmwasm_std::Order::Ascending) {
+        let (_price, bucket) = result?;
+        // Check each order in the bids and asks
+        for order in bucket.bids.iter().chain(bucket.asks.iter()) {
+            if order.owner == user {
+                user_orders.push(order.clone());
+            }
+        }
+    }
+
+    Ok(UserOrdersResponse { orders: user_orders })
+}
+
+
+
+
 
 fn query_details(deps: Deps, id: String) -> StdResult<DetailsResponse> {
     let escrow = ESCROWS.load(deps.storage, &id)?;
