@@ -8,7 +8,6 @@ use cosmwasm_std::{
 use cw2::set_contract_version;
 use cw20::{Balance, Cw20Coin, Cw20CoinVerified, Cw20ExecuteMsg, Cw20ReceiveMsg};
 use std::collections::HashMap;
-use uuid::Uuid;
 
 use crate::error::ContractError;
 use crate::msg::{
@@ -30,6 +29,7 @@ pub fn instantiate(
     let state = State {
         fyusdc_contract: deps.api.addr_validate(&_msg.fyusdc_contract)?,
         usdc_contract: deps.api.addr_validate(&_msg.usdc_contract)?,
+        max_order_id: 0,
     };
     STATE.save(deps.storage, &state)?;
 
@@ -67,6 +67,9 @@ pub fn execute(
         ExecuteMsg::TopUp { id } => execute_top_up(deps, id, Balance::from(info.funds)),
         ExecuteMsg::Refund { id } => execute_refund(deps, env, info, id),
         ExecuteMsg::Receive(msg) => execute_receive(deps, env, info, msg),
+        ExecuteMsg::CancelBid { order_id, price } => cancel_bid(deps, info, order_id, price),
+        ExecuteMsg::CancelAsk { order_id, price } => cancel_ask(deps, info, order_id, price),
+        _ => todo!(),
     }
 }
 
@@ -81,10 +84,10 @@ pub fn execute_receive(
     let msg: ReceiveMsg = from_binary(&wrapper.msg)?;
     let balance = Balance::Cw20(Cw20CoinVerified {
         amount: wrapper.amount,
-        address: info.sender,     
+        address: info.sender.clone(),     
     });
 
-    match info.sender {
+    match info.sender.clone() {
         sender if sender == state.fyusdc_contract || sender == state.usdc_contract => (),
         _ => return Err(StdError::generic_err("Invalid sender")),
     }
@@ -95,8 +98,9 @@ pub fn execute_receive(
             execute_create(deps, msg, balance, &api.addr_validate(&wrapper.sender)?)
         }
         ReceiveMsg::TopUp { id } => execute_top_up(deps, id, balance),
-        ReceiveMsg::CreateBid { quantity, price } => create_bid(deps, env, info, wrapper, quantity, price),
         ReceiveMsg::CreateAsk { quantity, price } => create_ask(deps, env, info, wrapper, quantity, price),
+        ReceiveMsg::CreateBid { quantity, price } => create_bid(deps, env, info, wrapper, quantity, price),
+
     }
 }
 
@@ -106,9 +110,9 @@ pub fn execute_create(
     msg: CreateMsg,
     balance: Balance,
     sender: &Addr,
-) -> Result<Response, ContractError> {
+) -> Result<Response, StdError> {
     if balance.is_empty() {
-        return Err(ContractError::EmptyBalance {});
+        return Err(StdError::generic_err("Balance cannot be empty"));
     }
 
     let mut cw20_whitelist = msg.addr_whitelist(deps.api)?;
@@ -149,12 +153,13 @@ pub fn execute_create(
     // try to store it, fail if the id was already in use
     ESCROWS.update(deps.storage, &msg.id, |existing| match existing {
         None => Ok(escrow),
-        Some(_) => Err(ContractError::AlreadyInUse {}),
+        Some(_) => Err(StdError::generic_err("ID is already in use")),
     })?;
 
     let res = Response::new().add_attributes(vec![("action", "create"), ("id", msg.id.as_str())]);
     Ok(res)
 }
+
 
 pub fn execute_set_recipient(
     deps: DepsMut,
@@ -162,10 +167,10 @@ pub fn execute_set_recipient(
     info: MessageInfo,
     id: String,
     recipient: String,
-) -> Result<Response, ContractError> {
+) -> Result<Response, StdError> {
     let mut escrow = ESCROWS.load(deps.storage, &id)?;
     if info.sender != escrow.arbiter {
-        return Err(ContractError::Unauthorized {});
+        return Err(StdError::generic_err("Unauthorized access"));
     }
 
     let recipient = deps.api.addr_validate(recipient.as_str())?;
@@ -178,14 +183,13 @@ pub fn execute_set_recipient(
         ("recipient", recipient.as_str()),
     ]))
 }
-
 pub fn execute_top_up(
     deps: DepsMut,
     id: String,
     balance: Balance,
-) -> Result<Response, ContractError> {
+) -> Result<Response, StdError> {
     if balance.is_empty() {
-        return Err(ContractError::EmptyBalance {});
+        return Err(StdError::generic_err("Balance cannot be empty"));
     }
     // this fails is no escrow there
     let mut escrow = ESCROWS.load(deps.storage, &id)?;
@@ -193,7 +197,7 @@ pub fn execute_top_up(
     if let Balance::Cw20(token) = &balance {
         // ensure the token is on the whitelist
         if !escrow.cw20_whitelist.iter().any(|t| t == &token.address) {
-            return Err(ContractError::NotInWhitelist {});
+            return Err(StdError::generic_err("Token is not in the whitelist"));
         }
     };
 
@@ -211,18 +215,19 @@ pub fn execute_approve(
     env: Env,
     info: MessageInfo,
     id: String,
-) -> Result<Response, ContractError> {
-    // this fails is no escrow there
+) -> Result<Response, StdError> {
     let escrow = ESCROWS.load(deps.storage, &id)?;
 
     if info.sender != escrow.arbiter {
-        return Err(ContractError::Unauthorized {});
-    }
-    if escrow.is_expired(&env) {
-        return Err(ContractError::Expired {});
+        return Err(StdError::generic_err("Unauthorized access"));
     }
 
-    let recipient = escrow.recipient.ok_or(ContractError::RecipientNotSet {})?;
+    if escrow.is_expired(&env) {
+        return Err(StdError::generic_err("The escrow has expired"));
+    }
+
+
+    let recipient = escrow.recipient.ok_or_else(|| StdError::generic_err("Recipient not set"))?;
 
     // we delete the escrow
     ESCROWS.remove(deps.storage, &id);
@@ -242,14 +247,13 @@ pub fn execute_refund(
     env: Env,
     info: MessageInfo,
     id: String,
-) -> Result<Response, ContractError> {
-    // this fails is no escrow there
+) -> Result<Response, StdError> {
     let escrow = ESCROWS.load(deps.storage, &id)?;
 
-    // the arbiter can send anytime OR anyone can send after expiration
     if !escrow.is_expired(&env) && info.sender != escrow.arbiter {
-        Err(ContractError::Unauthorized {})
-    } else {
+        return Err(StdError::generic_err("Unauthorized access"));
+    }
+    else {
         // we delete the escrow
         ESCROWS.remove(deps.storage, &id);
 
@@ -265,7 +269,7 @@ pub fn execute_refund(
 }
 
 pub fn create_bid(
-    deps: DepsMut,
+    mut deps: DepsMut,
     env: Env,
     info: MessageInfo,
     wrapper: Cw20ReceiveMsg,
@@ -282,7 +286,7 @@ pub fn create_bid(
     }
 
     // Create and add the bid order to the orderbook
-    let order_id = generate_order_id();
+    let order_id = generate_order_id( &mut deps)?;
     let order = Order {
         id: order_id.clone(),
         owner: info.sender.clone(),
@@ -302,7 +306,7 @@ pub fn create_bid(
 }
 
 pub fn create_ask(
-    deps: DepsMut,
+    mut deps: DepsMut,
     env: Env,
     info: MessageInfo,
     wrapper: Cw20ReceiveMsg,
@@ -319,7 +323,7 @@ pub fn create_ask(
     }
 
     // Create and add the bid order to the orderbook
-    let order_id = generate_order_id();
+    let order_id = generate_order_id( &mut deps)?;
     let order = Order {
         id: order_id.clone(),
         owner: info.sender.clone(),
@@ -337,6 +341,47 @@ pub fn create_ask(
         .add_attribute("action", "create_ask")
         .add_attribute("order_id", order_id))
 }
+
+pub fn cancel_bid(
+    deps: DepsMut,
+    info: MessageInfo,
+    order_id: String,
+    price: Uint128,
+) -> StdResult<Response> {
+    // Load the order bucket for the price point from the orderbook
+    let mut bucket = ORDER_BOOK.load(deps.storage, &format!("{}", price))?;
+
+    // Check if the order exists and the sender is the owner
+    match bucket.bids.iter().find(|order| order.id == order_id) {
+        Some(order) if order.owner == info.sender => {
+            bucket.remove_order(&order_id)?;
+            ORDER_BOOK.save(deps.storage, &format!("{}", price), &bucket)?;
+            Ok(Response::new().add_attribute("action", "cancel_bid").add_attribute("order_id", order_id))
+        },
+        _ => Err(StdError::generic_err("Order does not exist or the sender is not the owner")),
+    }
+}
+
+pub fn cancel_ask(
+    deps: DepsMut,
+    info: MessageInfo,
+    order_id: String,
+    price: Uint128,
+) -> StdResult<Response> {
+    // Load the order bucket for the price point from the orderbook
+    let mut bucket = ORDER_BOOK.load(deps.storage, &format!("{}", price))?;
+
+    // Check if the order exists and the sender is the owner
+    match bucket.asks.iter().find(|order| order.id == order_id) {
+        Some(order) if order.owner == info.sender => {
+            bucket.remove_order(&order_id)?;
+            ORDER_BOOK.save(deps.storage, &format!("{}", price), &bucket)?;
+            Ok(Response::new().add_attribute("action", "cancel_ask").add_attribute("order_id", order_id))
+        },
+        _ => Err(StdError::generic_err("Order does not exist or the sender is not the owner")),
+    }
+}
+
 
 fn send_tokens(to: &Addr, balance: &GenericBalance) -> StdResult<Vec<SubMsg>> {
     let native_balance = &balance.native;
@@ -439,10 +484,20 @@ pub fn update_order_bucket(
     }
 }
 
-pub fn generate_order_id() -> String {
-    // Replace this with a proper order ID generation mechanism.
-    format!("{}", uuid::Uuid::new_v4().to_string())
+pub fn generate_order_id(deps: &mut DepsMut<'_>) -> StdResult<String> {
+    // Load the state.
+    let mut state = STATE.load(deps.storage)?;
+
+    // Increment the max_order_id.
+    state.max_order_id += 1;
+
+    // Save the new state.
+    STATE.save(deps.storage, &state)?;
+
+    // Return the new order ID as a string.
+    Ok(format!("{}", state.max_order_id))
 }
+
 
 #[cfg(test)]
 mod tests {

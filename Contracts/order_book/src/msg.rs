@@ -39,8 +39,14 @@ pub enum ExecuteMsg {
 
     CreateBid { quantity: Uint128, price: Uint128 },
     CreateAsk { quantity: Uint128, price: Uint128 },
-    CancelBid { id: String },
-    CancelAsk { id: String },
+    CancelBid {
+        order_id: String,
+        price: Uint128,
+    },
+    CancelAsk {
+        order_id: String,
+        price: Uint128,
+    },
     UpdateBidOrder { id: String, new_quantity: Uint128 },
     UpdateAskOrder { id: String, new_quantity: Uint128 },
     MatchOrders {},  // Add this line.
@@ -52,10 +58,6 @@ pub enum ReceiveMsg {
     /// Adds all sent native tokens to the contract
     TopUp {
         id: String,
-    },
-    create_bid {
-        quantity: Uint128,
-
     },
     CreateBid { quantity: Uint128, price: Uint128 },
     CreateAsk { quantity: Uint128, price: Uint128 },

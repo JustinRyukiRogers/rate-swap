@@ -60,10 +60,11 @@ impl GenericBalance {
 pub struct State {
     pub fyusdc_contract: Addr,
     pub usdc_contract: Addr,
+    pub max_order_id: u64,
+
 }
 
 pub static STATE: Item<State> = Item::new("state");
-
 pub static ORDER_BOOK: Map<&str, OrderBucket> = Map::new("order_book");
 
 
