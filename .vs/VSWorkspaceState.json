@@ -2,10 +2,15 @@
   "ExpandedNodes": [
     "",
     "\\Contracts",
-    "\\Contracts\\fyUSDC2\\.cargo",
-    "\\Contracts\\fyUSDC2\\src",
-    "\\src"
+    "\\Contracts\\collateral_manager",
+    "\\Contracts\\collateral_manager\\src",
+    "\\Contracts\\cw20-escrow",
+    "\\Contracts\\cw20-escrow\\src",
+    "\\Contracts\\cw20-escrow\\target",
+    "\\Contracts\\fyUSDC\\src",
+    "\\Contracts\\matching_engine\\src",
+    "\\Contracts\\order_book\\src"
   ],
-  "SelectedNode": "\\Contracts\\fyUSDC2",
+  "SelectedNode": "\\Contracts\\cw20-escrow\\Cargo.toml",
   "PreviewInSolutionExplorer": false
 }

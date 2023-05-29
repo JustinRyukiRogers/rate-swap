@@ -1,0 +1,3 @@
+cargo:rerun-if-changed=build/main.rs
+cargo:rustc-env=TYPENUM_BUILD_CONSTS=C:\Users\jrkro\cosmwasm_1\rate_swap_osmo\contracts\order_book\target\wasm32-unknown-unknown\release\build\typenum-7ba82af789457dec\out\consts.rs
+cargo:rustc-env=TYPENUM_BUILD_OP=C:\Users\jrkro\cosmwasm_1\rate_swap_osmo\contracts\order_book\target\wasm32-unknown-unknown\release\build\typenum-7ba82af789457dec\out\op.rs
