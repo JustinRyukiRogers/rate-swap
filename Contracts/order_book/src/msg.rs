@@ -38,9 +38,6 @@ pub enum ExecuteMsg {
     },
     /// This accepts a properly-encoded ReceiveMsg from a cw20 contract
     Receive(Cw20ReceiveMsg),
-
-    CreateBid { quantity: Uint128, price: Uint128 },
-    CreateAsk { quantity: Uint128, price: Uint128 },
     CancelBid {
         order_id: String,
         price: Uint128,
@@ -49,9 +46,7 @@ pub enum ExecuteMsg {
         order_id: String,
         price: Uint128,
     },
-    UpdateBidOrder { id: String, new_quantity: Uint128 },
-    UpdateAskOrder { id: String, new_quantity: Uint128 },
-    MatchOrders {},  // Add this line.
+
 }
 
 #[cw_serde]

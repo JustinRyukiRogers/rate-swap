@@ -75,10 +75,10 @@ pub fn execute(
         ExecuteMsg::Receive(msg) => execute_receive(deps, env, info, msg),
         ExecuteMsg::CancelBid { order_id, price } => cancel_bid(deps, info, order_id, price),
         ExecuteMsg::CancelAsk { order_id, price } => cancel_ask(deps, info, order_id, price),
-        _ => todo!(),
+
+
     }
 }
-
 
 pub fn execute_receive(
     deps: DepsMut,
@@ -104,8 +104,9 @@ pub fn execute_receive(
             execute_create(deps, msg, balance, &api.addr_validate(&wrapper.sender)?)
         }
         ReceiveMsg::TopUp { id } => execute_top_up(deps, id, balance),
-        ReceiveMsg::CreateAsk { quantity, price } => create_ask(deps, env, info, wrapper, quantity, price),
-        ReceiveMsg::CreateBid { quantity, price } => create_bid(deps, env, info, wrapper, quantity, price),
+        ReceiveMsg::CreateAsk { quantity, price } => create_ask(deps, env, info, wrapper, price, quantity),
+        ReceiveMsg::CreateBid { quantity, price } => create_bid(deps, env, info, wrapper, price, quantity),
+
 
     }
 }
@@ -274,7 +275,7 @@ pub fn execute_refund(
     }
 }
 
-pub fn create_bid(
+fn create_bid(
     mut deps: DepsMut,
     env: Env,
     info: MessageInfo,
@@ -311,7 +312,7 @@ pub fn create_bid(
         .add_attribute("order_id", order_id))
 }
 
-pub fn create_ask(
+fn create_ask(
     mut deps: DepsMut,
     env: Env,
     info: MessageInfo,
