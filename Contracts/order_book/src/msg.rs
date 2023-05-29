@@ -1,10 +1,10 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
 
-use cosmwasm_std::{Addr, Api, Coin, StdResult, Uint128};
+use cosmwasm_std::{Addr, Api, Coin, StdResult, Uint128, Decimal};
 
 use cw20::{Cw20Coin, Cw20ReceiveMsg};
 
-use crate::state::{Order, OrderBucket};
+use crate::state::{Order, OrderBucket, State};
 
 #[cw_serde]
 pub struct InstantiateMsg {
@@ -40,13 +40,15 @@ pub enum ExecuteMsg {
     Receive(Cw20ReceiveMsg),
     CancelBid {
         order_id: String,
-        price: Uint128,
+        price: Decimal,
     },
     CancelAsk {
         order_id: String,
-        price: Uint128,
+        price: Decimal,
     },
-
+    UpdateBidOrder { id: String, new_quantity: Uint128 },
+    UpdateAskOrder { id: String, new_quantity: Uint128 },
+    MatchOrders {},
 }
 
 #[cw_serde]
@@ -56,8 +58,8 @@ pub enum ReceiveMsg {
     TopUp {
         id: String,
     },
-    CreateBid { quantity: Uint128, price: Uint128 },
-    CreateAsk { quantity: Uint128, price: Uint128 },
+    CreateBid { quantity: Uint128, price: Decimal },
+    CreateAsk { quantity: Uint128, price: Decimal },
 }
 
 #[cw_serde]
@@ -117,7 +119,15 @@ pub enum QueryMsg {
     GetOrderbook {},
     #[returns(UserOrdersResponse)]
     GetUserOrders { user: Addr },
+    #[returns(StateResposne)]
+    GetState {},
 }
+
+#[cw_serde]
+pub struct StateResponse {
+    pub State: Vec<State>,
+}
+
 
 #[cw_serde]
 pub struct OrderbookResponse {

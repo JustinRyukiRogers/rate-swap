@@ -4,7 +4,7 @@ use cosmwasm_schema::{schemars, serde};
 use serde::{Serialize, Deserialize};
 
 
-use cosmwasm_std::{Addr, Coin, Env, Order as cOrder, StdResult, StdError, Storage, Timestamp, Uint128, to_binary};
+use cosmwasm_std::{Addr, Coin, Env, Order as cOrder, StdResult, StdError, Storage, Timestamp, Uint128, to_binary, Decimal};
 use cw_storage_plus::Map;
 use cw_storage_plus::Item;
 use std::collections::HashMap;
@@ -65,6 +65,7 @@ pub struct State {
 
 pub static STATE: Item<State> = Item::new("state");
 pub static ORDER_BOOK: Map<&str, OrderBucket> = Map::new("order_book");
+pub static ORDERS: Map<&str, Order> = Map::new("orders");
 
 
 
@@ -112,7 +113,7 @@ pub struct Order {
     pub id: String,
     pub owner: Addr,
     pub quantity: Uint128,
-    pub price: Uint128,
+    pub price: Decimal,
 }
 
 

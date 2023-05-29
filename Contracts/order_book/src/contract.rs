@@ -2,7 +2,7 @@
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
     from_binary, to_binary, Addr, BankMsg, Binary, Deps, DepsMut, Env, MessageInfo, Response,
-    StdResult, StdError, SubMsg, WasmMsg, Uint128, Decimal
+    StdResult, StdError, SubMsg, WasmMsg, Uint128, Decimal, CosmosMsg
 };
 
 use cw2::set_contract_version;
@@ -11,9 +11,9 @@ use std::collections::HashMap;
 
 use crate::error::ContractError;
 use crate::msg::{
-    CreateMsg, DetailsResponse, ExecuteMsg, InstantiateMsg, ListResponse, QueryMsg, ReceiveMsg, OrderbookResponse, UserOrdersResponse
+    CreateMsg, DetailsResponse, ExecuteMsg, InstantiateMsg, ListResponse, QueryMsg, ReceiveMsg, OrderbookResponse, UserOrdersResponse, StateResponse
 };
-use crate::state::{State, Order, OrderBucket, all_escrow_ids, Escrow, GenericBalance, ESCROWS, OrderType, STATE, ORDER_BOOK};
+use crate::state::{State, Order, OrderBucket, all_escrow_ids, Escrow, GenericBalance, ESCROWS, OrderType, STATE, ORDER_BOOK, ORDERS};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:cw20-escrow";
@@ -75,7 +75,9 @@ pub fn execute(
         ExecuteMsg::Receive(msg) => execute_receive(deps, env, info, msg),
         ExecuteMsg::CancelBid { order_id, price } => cancel_bid(deps, info, order_id, price),
         ExecuteMsg::CancelAsk { order_id, price } => cancel_ask(deps, info, order_id, price),
-
+        ExecuteMsg::UpdateBidOrder { id, new_quantity } => update_bid_order(deps, env, info, id, new_quantity),
+        ExecuteMsg::UpdateAskOrder { id, new_quantity } => update_ask_order(deps, env, info, id, new_quantity),
+        ExecuteMsg::MatchOrders {} => match_orders(deps, env, info),
 
     }
 }
@@ -280,7 +282,7 @@ fn create_bid(
     env: Env,
     info: MessageInfo,
     wrapper: Cw20ReceiveMsg,
-    price: Uint128,
+    price: Decimal,
     quantity: Uint128,
 ) -> StdResult<Response> {
     // Load state
@@ -306,6 +308,8 @@ fn create_bid(
     // Add the order to the bucket and save it back to the orderbook
     bucket.add_order(order, OrderType::Bid);
     ORDER_BOOK.save(deps.storage, &format!("{}", price), &bucket)?;
+    ORDERS.save(deps.storage, &order.id, &order)?;
+
 
     Ok(Response::new()
         .add_attribute("action", "create_bid")
@@ -317,7 +321,7 @@ fn create_ask(
     env: Env,
     info: MessageInfo,
     wrapper: Cw20ReceiveMsg,
-    price: Uint128,
+    price: Decimal,
     quantity: Uint128,
 ) -> StdResult<Response> {
     // Load state
@@ -343,6 +347,8 @@ fn create_ask(
     // Add the order to the bucket and save it back to the orderbook
     bucket.add_order(order, OrderType::Ask);
     ORDER_BOOK.save(deps.storage, &format!("{}", price), &bucket)?;
+    ORDERS.save(deps.storage, &order.id, &order)?;
+
 
     Ok(Response::new()
         .add_attribute("action", "create_ask")
@@ -350,10 +356,10 @@ fn create_ask(
 }
 
 pub fn cancel_bid(
-    deps: DepsMut,
+    mut deps: DepsMut,
     info: MessageInfo,
     order_id: String,
-    price: Uint128,
+    price: Decimal,
 ) -> StdResult<Response> {
     // Load the order bucket for the price point from the orderbook
     let mut bucket = ORDER_BOOK.load(deps.storage, &format!("{}", price))?;
@@ -363,6 +369,10 @@ pub fn cancel_bid(
         Some(order) if order.owner == info.sender => {
             bucket.remove_order(&order_id)?;
             ORDER_BOOK.save(deps.storage, &format!("{}", price), &bucket)?;
+
+            // Also remove the order from the ORDERS map
+            ORDERS.remove(deps.storage, &order_id);
+
             Ok(Response::new().add_attribute("action", "cancel_bid").add_attribute("order_id", order_id))
         },
         _ => Err(StdError::generic_err("Order does not exist or the sender is not the owner")),
@@ -373,7 +383,7 @@ pub fn cancel_ask(
     deps: DepsMut,
     info: MessageInfo,
     order_id: String,
-    price: Uint128,
+    price: Decimal,
 ) -> StdResult<Response> {
     // Load the order bucket for the price point from the orderbook
     let mut bucket = ORDER_BOOK.load(deps.storage, &format!("{}", price))?;
@@ -383,10 +393,133 @@ pub fn cancel_ask(
         Some(order) if order.owner == info.sender => {
             bucket.remove_order(&order_id)?;
             ORDER_BOOK.save(deps.storage, &format!("{}", price), &bucket)?;
+            
+            // Also remove the order from the ORDERS map
+            ORDERS.remove(deps.storage, &order_id);
+
             Ok(Response::new().add_attribute("action", "cancel_ask").add_attribute("order_id", order_id))
         },
         _ => Err(StdError::generic_err("Order does not exist or the sender is not the owner")),
     }
+}
+
+pub fn update_bid_order(
+    mut deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    id: String,
+    new_quantity: Uint128,
+) -> StdResult<Response> {
+    // Load state
+    let state = STATE.load(deps.storage)?;
+
+    // Get the order by its ID
+    let mut order = ORDERS.load(deps.storage, &id)?;
+
+    // Ensure the sender is the order's owner
+    if order.owner != info.sender {
+        return Err(StdError::generic_err("Sender must be the order's owner"));
+    }
+
+    // Ensure the new quantity is lower than the current quantity
+    if new_quantity > order.quantity {
+        return Err(StdError::generic_err("New quantity must be lower than the current quantity"));
+    }
+
+    // Get the order bucket using the order's price
+    let mut bucket = ORDER_BOOK.load(deps.storage, &order.price.to_string())?;
+
+    // Find the order in the bucket and update its quantity
+    for bid in &mut bucket.bids {
+        if bid.id == id {
+            bid.quantity = new_quantity;
+            break;
+        }
+    }
+
+    // Save the updated order and bucket
+    order.quantity = new_quantity;
+    ORDERS.save(deps.storage, &id, &order)?;
+    ORDER_BOOK.save(deps.storage, &order.price.to_string(), &bucket)?;
+
+    // Return excess tokens to the owner
+    let excess_amount = order.quantity.checked_sub(new_quantity)?;
+    let transfer_msg = Cw20ExecuteMsg::Transfer {
+        recipient: info.sender.to_string(),
+        amount: excess_amount,
+    };
+    let cosmos_msg = WasmMsg::Execute {
+        contract_addr: state.usdc_contract.to_string(),
+        msg: to_binary(&transfer_msg)?,
+        funds: vec![],
+    };
+    let cosmos_response = Response::new()
+        .add_message(cosmos_msg)
+        .add_attribute("action", "update_bid_order")
+        .add_attribute("order_id", &id)
+        .add_attribute("new_quantity", &new_quantity.to_string());
+    
+    Ok(cosmos_response)
+}
+
+
+pub fn update_ask_order(
+    mut deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    id: String,
+    new_quantity: Uint128,
+) -> StdResult<Response> {
+    // Load state
+    let state = STATE.load(deps.storage)?;
+
+    // Get the order by its ID
+    let mut order = ORDERS.load(deps.storage, &id)?;
+
+    // Ensure the sender is the order's owner
+    if order.owner != info.sender {
+        return Err(StdError::generic_err("Sender must be the order's owner"));
+    }
+
+    // Ensure the new quantity is lower than the current quantity
+    if new_quantity > order.quantity {
+        return Err(StdError::generic_err("New quantity must be lower than the current quantity"));
+    }
+
+    // Get the order bucket using the order's price
+    let mut bucket = ORDER_BOOK.load(deps.storage, &order.price.to_string())?;
+
+    // Find the order in the bucket and update its quantity
+    for ask in &mut bucket.asks {
+        if ask.id == id {
+            ask.quantity = new_quantity;
+            break;
+        }
+    }
+
+    // Save the updated order and bucket
+    order.quantity = new_quantity;
+    ORDERS.save(deps.storage, &id, &order)?;
+    ORDER_BOOK.save(deps.storage, &order.price.to_string(), &bucket)?;
+
+    // Return excess tokens to the owner
+    let excess_amount = order.quantity.checked_sub(new_quantity)?;
+    let transfer_msg = Cw20ExecuteMsg::Transfer {
+        recipient: info.sender.to_string(),
+        amount: excess_amount,
+    };
+    let cosmos_msg = WasmMsg::Execute {
+        contract_addr: state.usdc_contract.to_string(),
+        msg: to_binary(&transfer_msg)?,
+        funds: vec![],
+    };
+    let cosmos_response = Response::new()
+        .add_message(cosmos_msg)
+        .add_attribute("action", "update_ask_order")
+        .add_attribute("order_id", &id)
+        .add_attribute("new_quantity", &new_quantity.to_string());
+    
+    Ok(cosmos_response)
 }
 
 
@@ -428,8 +561,20 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::Details { id } => to_binary(&query_details(deps, id)?),
         QueryMsg::GetOrderbook {} => to_binary(&query_orderbook(deps)?),
         QueryMsg::GetUserOrders { user } => to_binary(&query_user_orders(deps, user)?),
+        QueryMsg::GetState {} => to_binary(&query_state(deps)?)
     }
 }
+
+pub fn query_state(deps: Deps) -> StdResult<StateResponse> {
+    // Load state from storage
+    let state = STATE.load(deps.storage)?;
+
+    // Put it in a vector, since your response expects a vector
+    let State: Vec<State> = vec![state];
+
+    Ok(StateResponse { State })
+}
+
 
 pub fn query_orderbook(deps: Deps) -> StdResult<OrderbookResponse> {
     // Initialize an empty vector to hold the results
