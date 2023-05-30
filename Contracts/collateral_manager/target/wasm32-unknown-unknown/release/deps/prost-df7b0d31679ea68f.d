@@ -1,0 +1,11 @@
+C:\Users\jrkro\cosmwasm_1\rate_swap_osmo\contracts\collateral_manager\target\wasm32-unknown-unknown\release\deps\prost-df7b0d31679ea68f.rmeta: C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\prost-0.10.4\src\lib.rs C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\prost-0.10.4\src\error.rs C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\prost-0.10.4\src\message.rs C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\prost-0.10.4\src\types.rs C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\prost-0.10.4\src\encoding.rs
+
+C:\Users\jrkro\cosmwasm_1\rate_swap_osmo\contracts\collateral_manager\target\wasm32-unknown-unknown\release\deps\libprost-df7b0d31679ea68f.rlib: C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\prost-0.10.4\src\lib.rs C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\prost-0.10.4\src\error.rs C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\prost-0.10.4\src\message.rs C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\prost-0.10.4\src\types.rs C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\prost-0.10.4\src\encoding.rs
+
+C:\Users\jrkro\cosmwasm_1\rate_swap_osmo\contracts\collateral_manager\target\wasm32-unknown-unknown\release\deps\prost-df7b0d31679ea68f.d: C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\prost-0.10.4\src\lib.rs C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\prost-0.10.4\src\error.rs C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\prost-0.10.4\src\message.rs C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\prost-0.10.4\src\types.rs C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\prost-0.10.4\src\encoding.rs
+
+C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\prost-0.10.4\src\lib.rs:
+C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\prost-0.10.4\src\error.rs:
+C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\prost-0.10.4\src\message.rs:
+C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\prost-0.10.4\src\types.rs:
+C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\prost-0.10.4\src\encoding.rs:

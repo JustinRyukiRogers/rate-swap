@@ -669,37 +669,6 @@ fn query_list(deps: Deps) -> StdResult<ListResponse> {
     })
 }
 
-pub fn update_order_bucket(
-    deps: DepsMut,
-    price: String,
-    order: Order,
-    order_type: OrderType
-) -> StdResult<()> {
-    // Try to load the bucket for the given price
-    match ORDER_BOOK.load(deps.storage, &price) {
-        // If it exists, update it
-        Ok(mut bucket) => {
-            bucket.add_order(order, order_type);
-            ORDER_BOOK.save(deps.storage, &price, &bucket)
-        },
-        // If it doesn't exist, return an error
-        Err(_) => Err(StdError::generic_err("No order bucket exists for the given price")),
-    }
-}
-
-pub fn generate_order_id(deps: &mut DepsMut<'_>) -> StdResult<String> {
-    // Load the state.
-    let mut state = STATE.load(deps.storage)?;
-
-    // Increment the max_order_id.
-    state.max_order_id += 1;
-
-    // Save the new state.
-    STATE.save(deps.storage, &state)?;
-
-    // Return the new order ID as a string.
-    Ok(format!("{}", state.max_order_id))
-}
 
 
 #[cfg(test)]
