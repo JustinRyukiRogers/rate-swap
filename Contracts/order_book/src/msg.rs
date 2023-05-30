@@ -48,7 +48,7 @@ pub enum ExecuteMsg {
     },
     UpdateBidOrder { id: String, new_quantity: Uint128 },
     UpdateAskOrder { id: String, new_quantity: Uint128 },
-    MatchOrders {},
+    //MatchOrders {},
 }
 
 #[cw_serde]
@@ -58,8 +58,8 @@ pub enum ReceiveMsg {
     TopUp {
         id: String,
     },
-    CreateBid { quantity: Uint128, price: Decimal },
-    CreateAsk { quantity: Uint128, price: Decimal },
+    CreateBid { orderer: Addr, quantity: Uint128, price: Decimal },
+    CreateAsk { orderer: Addr, quantity: Uint128, price: Decimal },
 }
 
 #[cw_serde]
@@ -119,7 +119,7 @@ pub enum QueryMsg {
     GetOrderbook {},
     #[returns(UserOrdersResponse)]
     GetUserOrders { user: Addr },
-    #[returns(StateResposne)]
+    #[returns(StateResponse)]
     GetState {},
 }
 

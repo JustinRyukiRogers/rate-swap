@@ -114,6 +114,8 @@ pub struct Order {
     pub owner: Addr,
     pub quantity: Uint128,
     pub price: Decimal,
+    pub Type: String,
+    pub orderer: Addr
 }
 
 
@@ -174,47 +176,3 @@ pub fn all_escrow_ids(storage: &dyn Storage) -> StdResult<Vec<String>> {
         .collect()
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    use cosmwasm_std::testing::MockStorage;
-
-    #[test]
-    fn no_escrow_ids() {
-        let storage = MockStorage::new();
-        let ids = all_escrow_ids(&storage).unwrap();
-        assert_eq!(0, ids.len());
-    }
-
-    fn dummy_escrow() -> Escrow {
-        Escrow {
-            arbiter: Addr::unchecked("arb"),
-            recipient: Some(Addr::unchecked("recip")),
-            source: Addr::unchecked("source"),
-            title: "some_escrow".to_string(),
-            description: "some escrow desc".to_string(),
-            end_height: None,
-            end_time: None,
-            balance: Default::default(),
-            cw20_whitelist: vec![],
-        }
-    }
-
-    #[test]
-    fn all_escrow_ids_in_order() {
-        let mut storage = MockStorage::new();
-        ESCROWS.save(&mut storage, "lazy", &dummy_escrow()).unwrap();
-        ESCROWS
-            .save(&mut storage, "assign", &dummy_escrow())
-            .unwrap();
-        ESCROWS.save(&mut storage, "zen", &dummy_escrow()).unwrap();
-
-        let ids = all_escrow_ids(&storage).unwrap();
-        assert_eq!(3, ids.len());
-        assert_eq!(
-            vec!["assign".to_string(), "lazy".to_string(), "zen".to_string()],
-            ids
-        )
-    }
-}

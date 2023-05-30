@@ -1,0 +1,15 @@
+C:\Users\jrkro\cosmwasm_1\rate_swap_osmo\contracts\order_book\target\debug\deps\cw20_base-9579608196834200.dll: C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\cw20-base-0.16.0\src\lib.rs C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\cw20-base-0.16.0\src\allowances.rs C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\cw20-base-0.16.0\src\contract.rs C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\cw20-base-0.16.0\src\enumerable.rs C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\cw20-base-0.16.0\src\error.rs C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\cw20-base-0.16.0\src\msg.rs C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\cw20-base-0.16.0\src\state.rs
+
+C:\Users\jrkro\cosmwasm_1\rate_swap_osmo\contracts\order_book\target\debug\deps\libcw20_base-9579608196834200.rlib: C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\cw20-base-0.16.0\src\lib.rs C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\cw20-base-0.16.0\src\allowances.rs C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\cw20-base-0.16.0\src\contract.rs C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\cw20-base-0.16.0\src\enumerable.rs C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\cw20-base-0.16.0\src\error.rs C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\cw20-base-0.16.0\src\msg.rs C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\cw20-base-0.16.0\src\state.rs
+
+C:\Users\jrkro\cosmwasm_1\rate_swap_osmo\contracts\order_book\target\debug\deps\cw20_base-9579608196834200.d: C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\cw20-base-0.16.0\src\lib.rs C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\cw20-base-0.16.0\src\allowances.rs C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\cw20-base-0.16.0\src\contract.rs C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\cw20-base-0.16.0\src\enumerable.rs C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\cw20-base-0.16.0\src\error.rs C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\cw20-base-0.16.0\src\msg.rs C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\cw20-base-0.16.0\src\state.rs
+
+C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\cw20-base-0.16.0\src\lib.rs:
+C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\cw20-base-0.16.0\src\allowances.rs:
+C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\cw20-base-0.16.0\src\contract.rs:
+C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\cw20-base-0.16.0\src\enumerable.rs:
+C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\cw20-base-0.16.0\src\error.rs:
+C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\cw20-base-0.16.0\src\msg.rs:
+C:\Users\jrkro\.cargo\registry\src\github.com-1ecc6299db9ec823\cw20-base-0.16.0\src\state.rs:
+
+# env-dep:CARGO_PKG_VERSION=0.16.0
