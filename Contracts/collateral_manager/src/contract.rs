@@ -2,7 +2,7 @@
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
     from_binary, to_binary, Addr, BankMsg, Binary, Deps, DepsMut, Env, MessageInfo, Response,
-    StdResult, StdError, SubMsg, WasmMsg, Uint128, Decimal, CosmosMsg
+    StdResult, StdError, SubMsg, WasmMsg, Uint128, Decimal, CosmosMsg, Empty
 };
 
 use cw2::set_contract_version;
@@ -64,6 +64,7 @@ pub fn execute(
         ExecuteMsg::Receive(msg) => execute_receive(deps, env, info, msg),
         ExecuteMsg::Withdraw { amount } => withdraw_collateral(deps, env, info, amount),
         ExecuteMsg::Borrow { amount } => borrow(deps, env, info, amount),
+        ExecuteMsg::Liquidate { borrower } => liquidate_collateral(deps, env, info, borrower)
 
     }
 }
@@ -341,7 +342,71 @@ fn try_withdraw_usdc(
 }
 
 
+pub fn liquidate_collateral(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    borrower: Addr,
+) -> Result<Response, StdError> {
 
+    let state = STATE.load(deps.storage)?;
+    let liquidator_contract_address = state.liquidator;
+
+
+    // Load loan and collateral balances
+    let loan = LOANS.load(deps.storage, &borrower)?;
+    let collateral_balance = COLLATERALS.load(deps.storage, &borrower)?;
+        
+    //Liquidation amount
+    let amount = loan * state.liquidation_penalty;
+
+    // Query prices for USDC and ATOM
+    let prices_response = query_prices(deps.as_ref())?;
+
+    // Convert loan balance and collateral balance to USD value
+    let loan_balance_usd = loan * prices_response.usdc;
+    let collateral_balance_usd = collateral_balance * prices_response.atom;
+
+
+    // Calculate new collateral balance
+    let new_collateral = collateral_balance.checked_sub(amount)?;
+
+    // Calculate the new collateralization ratio
+    let collateralization_ratio = if loan == Uint128::zero() {
+        Decimal::one()
+    } else {
+        Decimal::from_ratio(collateral_balance_usd, loan)
+    };
+
+    // Check if the new collateralization ratio is below the liquidation threshold
+    if collateralization_ratio >= state.liquidation_threshold && env.block.time.seconds() <= state.liquidation_deadline {
+        return Err(StdError::generic_err("LiquidationThresholdNotReached"));
+    }
+
+    // Update the borrower's collateral balance
+    COLLATERALS.save(deps.storage, &borrower, &new_collateral)?;
+    LOANS.save(deps.storage, &borrower, &Uint128::zero())?;
+
+    // Transfer the liquidated collateral directly to the liquidator
+    let atom_address = state.atom_contract;
+    let cw20_msg = Cw20ExecuteMsg::Transfer {
+        recipient: liquidator_contract_address.to_string(), // Transfer to the liquidator's address
+        amount: amount,
+    };
+    let cosmos_msg: CosmosMsg<Empty> = CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: atom_address.to_string(),
+        msg: to_binary(&cw20_msg)?,
+        funds: vec![],
+    });
+
+    Ok(Response::new()
+        .add_attribute("action", "liquidate_collateral")
+        .add_attribute("borrower", borrower)
+        .add_attribute("liquidated_collateral_amount", amount.to_string())
+    )
+
+
+}
 
 pub fn execute_create(
     deps: DepsMut,

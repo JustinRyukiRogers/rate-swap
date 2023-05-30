@@ -48,8 +48,9 @@ pub enum ExecuteMsg {
     Borrow {
         amount: Uint128
     },
-
-
+    Liquidate {
+        borrower: Addr
+    },
 
 }
 
