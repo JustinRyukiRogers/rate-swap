@@ -21,8 +21,8 @@ pub struct State {
     pub liquidation_deadline: Expiration,
     pub liquidator: Addr,
     pub order_manager_contract: Addr,
-    pub liquidation_threshold: u64,
-    pub liquidation_penalty: u64,
+    pub liquidation_threshold: Decimal,
+    pub liquidation_penalty: Decimal,
     pub fyusdc_contract: Addr,
     pub usdc_contract: Addr,
     pub rsp_contract: Addr,
@@ -39,8 +39,8 @@ impl State {
         new_liquidation_deadline: Option<Expiration>,
         new_liquidator: Option<Addr>,
         new_order_manager_contract: Option<Addr>,
-        new_liquidation_threshold: Option<u64>,
-        new_liquidation_penalty: Option<u64>,
+        new_liquidation_threshold: Option<Decimal>,
+        new_liquidation_penalty: Option<Decimal>,
         new_fyusdc_contract: Option<Addr>,
     ) -> StdResult<()> {  
         if caller != &self.contract_owner {
@@ -75,7 +75,7 @@ impl State {
 // Added constant for state storage
 pub const STATE: Item<State> = Item::new("state");
 pub const COLLATERALS: Map<&Addr, Uint128> = Map::new("collaterals");
-pub const LOANS: Map<Addr, Uint128> = Map::new("loans");
+pub const LOANS: Map<&Addr, Uint128> = Map::new("loans");
 pub const CONTRACT_USDC_BALANCE: Item<Uint128> = Item::new("contract_usdc_balance");
 
 

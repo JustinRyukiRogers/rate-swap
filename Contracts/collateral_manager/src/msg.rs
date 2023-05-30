@@ -13,8 +13,8 @@ pub struct InstantiateMsg {
     pub order_manager_contract: Addr,
     pub fyusdc_contract: Addr,
     pub usdc_contract: Addr,
-    pub liquidation_threshold: u64,
-    pub liquidation_penalty: u64,
+    pub liquidation_threshold: Decimal,
+    pub liquidation_penalty: Decimal,
     pub rsp_contract: Addr,
     pub atom_contract: Addr
 }
@@ -56,7 +56,7 @@ pub enum ReceiveMsg {
         id: String,
     },
     Deposit{
-        amount: Uint128
+        orderer: Addr
     }
 }
 
@@ -113,8 +113,35 @@ pub enum QueryMsg {
     /// Return type: DetailsResponse.
     #[returns(DetailsResponse)]
     Details { id: String },
-
+    #[returns(CollateralResponse)]
+    GetCollateral { address: Addr },
+    #[returns(LoanResponse)]
+    GetLoan { address: Addr }, 
+    #[returns(PricesResponse)]
+    GetPrices {}, 
 }
+
+#[cw_serde]
+pub struct PricesResponse {
+    pub atom: Decimal,
+    pub usdc: Decimal,
+}
+
+#[cw_serde]
+pub struct CollateralResponse {
+    /// address
+    pub address: Addr,
+    /// collateral balance
+    pub balance: Uint128,
+}
+#[cw_serde]
+pub struct LoanResponse {
+    /// address
+    pub address: Addr,
+    /// loan balance
+    pub balance: Uint128,
+}
+
 
 #[cw_serde]
 pub struct ListResponse {

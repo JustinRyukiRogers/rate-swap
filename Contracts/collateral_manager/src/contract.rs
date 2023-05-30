@@ -11,7 +11,7 @@ use std::collections::HashMap;
 
 use crate::error::ContractError;
 use crate::msg::{
-    CreateMsg, DetailsResponse, ExecuteMsg, InstantiateMsg, ListResponse, QueryMsg, ReceiveMsg, 
+    CreateMsg, DetailsResponse, ExecuteMsg, InstantiateMsg, ListResponse, QueryMsg, ReceiveMsg, CollateralResponse, LoanResponse, PricesResponse
 };
 use crate::state::{ all_escrow_ids, Escrow, GenericBalance, ESCROWS, State, STATE, COLLATERALS, LOANS, CONTRACT_USDC_BALANCE};
 
@@ -90,7 +90,7 @@ pub fn execute_receive(
     let api = deps.api;
     if info.sender == state.atom_contract {
         match msg {
-            ReceiveMsg::Deposit { amount } => deposit_collateral(deps, env, info, amount),
+            ReceiveMsg::Deposit { orderer, .. } => deposit_collateral(deps, env, info, orderer, wrapper.amount),
             _ => Err(StdError::generic_err("Invalid operation for atom contract")),
         }
     } else {
@@ -109,30 +109,87 @@ fn deposit_collateral(
     deps: DepsMut,
     _env: Env,
     info: MessageInfo,
+    orderer: Addr,
     amount: Uint128,
 ) -> Result<Response, StdError> {
     // Load user's collateral from storage
-    STATE.load(deps.storage);
-
-
-    let mut collateral = COLLATERALS.load(deps.storage, &info.sender)?;
+    let mut collateral = COLLATERALS.load(deps.storage, &orderer)?;
 
 
     // Add the deposited amount to the user's collateral
     collateral += amount;
 
     // Save the updated collateral amount to storage
-    COLLATERALS.save(deps.storage, &info.sender, &collateral)?;
+    COLLATERALS.save(deps.storage, &orderer, &collateral)?;
 
 
     // Return a successful response
     Ok(Response::new().add_attributes(vec![
         Attribute::new("action", "deposit_collateral"),
-        Attribute::new("sender", info.sender),
+        Attribute::new("sender", orderer),
         Attribute::new("collateral_amount", amount),
-]))
-
+    ]))
 }
+
+
+pub fn withdraw_collateral(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+    amount: Uint128,
+) -> Result<Response, StdError> {
+    let state = STATE.load(deps.storage)?;
+    let liquidation_threshold = state.liquidation_threshold;
+    let mut collateral = COLLATERALS.load(deps.storage, &info.sender)?;
+
+    // Query prices for USDC and ATOM
+    let prices_response = query_prices(deps.as_ref())?;
+
+    // Calculate the new collateral balance after withdrawal
+    let collateral_usd = (collateral - amount) * prices_response.atom;
+
+    // Retrieve the borrower's loan balance
+    let loan = LOANS.load(deps.storage, &info.sender)?;
+    let loan_usd = loan * prices_response.usdc;
+
+    // Calculate the new collateralization ratio
+    let new_collateralization_ratio = if loan == Uint128::zero() {
+        Decimal::one()
+    } else {
+        Decimal::from_ratio(collateral_usd, loan_usd)
+    };
+
+    // Check if the new collateralization ratio is above the liquidation threshold
+    if new_collateralization_ratio < liquidation_threshold {
+        return Err(StdError::generic_err("Withdrawal would trigger liquidation"));
+    }
+
+    // Decrease collateral
+    collateral -= amount;
+    COLLATERALS.save(deps.storage, &info.sender, &collateral)?;
+
+    // Create CW20 Transfer message
+    let transfer_msg = Cw20ExecuteMsg::Transfer {
+        recipient: info.sender.to_string(),
+        amount,
+    };
+
+    let cosmos_msg = WasmMsg::Execute {
+        contract_addr: state.atom_contract.to_string(), // Assume this is the ATOM CW20 contract address
+        msg: to_binary(&transfer_msg)?,
+        funds: vec![],
+    };
+
+    Ok(Response::new()
+        .add_message(cosmos_msg)
+        .add_attributes(vec![
+            Attribute::new("action", "withdraw_collateral"),
+            Attribute::new("sender", info.sender),
+            Attribute::new("collateral_amount", amount),
+        ]))
+}
+
+
 
 
 pub fn execute_create(
@@ -334,13 +391,38 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::List {} => to_binary(&query_list(deps)?),
         QueryMsg::Details { id } => to_binary(&query_details(deps, id)?),
-
+        QueryMsg::GetCollateral { address } => to_binary(&query_collateral(deps, address)?),
+        QueryMsg::GetLoan { address } => to_binary(&query_loan(deps, address)?),
+        QueryMsg::GetPrices {} => to_binary(&query_prices(deps)?)
     }
 }
 
 
+fn query_collateral(deps: Deps, address: Addr) -> StdResult<CollateralResponse> {
+    let balance = COLLATERALS.load(deps.storage, &address)?;
+    Ok(CollateralResponse {
+        address,
+        balance,
+    })
+}
 
+fn query_loan(deps: Deps, address: Addr) -> StdResult<LoanResponse> {
+    let balance = LOANS.load(deps.storage, &address)?;
+    Ok(LoanResponse {
+        address,
+        balance,
+    })
+}
 
+pub fn query_prices(_deps: Deps) -> StdResult<PricesResponse> {
+    // Hard-coded prices
+    let prices = PricesResponse {
+        atom: Decimal::one(),
+        usdc: Decimal::one(),
+    };
+
+    Ok(prices)
+}
 
 
 
