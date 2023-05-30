@@ -7,16 +7,13 @@ use cw20::{Cw20Coin, Cw20ReceiveMsg, Expiration};
 
 #[cw_serde]
 pub struct InstantiateMsg {
-    pub authorized_checker: Addr,
-    pub liquidation_deadline: Expiration,
+    pub liquidation_deadline: u64,
     pub liquidator: Addr,
-    pub order_manager_contract: Addr,
     pub fyusdc_contract: Addr,
     pub usdc_contract: Addr,
     pub liquidation_threshold: Decimal,
     pub liquidation_penalty: Decimal,
-    pub rsp_contract: Addr,
-    pub atom_contract: Addr
+    pub atom_contract: Addr,
 }
 
 #[cw_serde]
@@ -45,6 +42,14 @@ pub enum ExecuteMsg {
     },
     /// This accepts a properly-encoded ReceiveMsg from a cw20 contract
     Receive(Cw20ReceiveMsg),
+    Withdraw {
+        amount: Uint128
+    },
+    Borrow {
+        amount: Uint128
+    },
+
+
 
 }
 
@@ -59,6 +64,9 @@ pub enum ReceiveMsg {
         orderer: Addr
     },
     Repay {
+        orderer: Addr
+    },
+    Redeem {
         orderer: Addr
     }
 }

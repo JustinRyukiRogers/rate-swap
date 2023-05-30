@@ -2,11 +2,11 @@
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
     from_binary, to_binary, Addr, BankMsg, Binary, Deps, DepsMut, Env, MessageInfo, Response,
-    StdResult, StdError, SubMsg, WasmMsg, Uint128, Decimal, CosmosMsg, Attribute
+    StdResult, StdError, SubMsg, WasmMsg, Uint128, Decimal, CosmosMsg
 };
 
 use cw2::set_contract_version;
-use cw20::{Balance, Cw20Coin, Cw20CoinVerified, Cw20ExecuteMsg, Cw20ReceiveMsg, Expiration};
+use cw20::{Balance, Cw20Coin, Cw20CoinVerified, Cw20ExecuteMsg, Cw20ReceiveMsg};
 use std::collections::HashMap;
 
 use crate::error::ContractError;
@@ -28,15 +28,12 @@ pub fn instantiate(
 ) -> StdResult<Response> {
     let state = State {
         contract_owner: _info.sender,
-        authorized_checker: _msg.authorized_checker,
         liquidation_deadline: _msg.liquidation_deadline,
         liquidator: _msg.liquidator,
-        order_manager_contract: _msg.order_manager_contract,
         fyusdc_contract: _msg.fyusdc_contract,
         usdc_contract: _msg.usdc_contract,
         liquidation_threshold: _msg.liquidation_threshold,
         liquidation_penalty: _msg.liquidation_penalty,
-        rsp_contract: _msg.rsp_contract,
         atom_contract: _msg.atom_contract,
     };
 
@@ -65,6 +62,8 @@ pub fn execute(
         ExecuteMsg::TopUp { id } => execute_top_up(deps, id, Balance::from(info.funds)),
         ExecuteMsg::Refund { id } => execute_refund(deps, env, info, id),
         ExecuteMsg::Receive(msg) => execute_receive(deps, env, info, msg),
+        ExecuteMsg::Withdraw { amount } => withdraw_collateral(deps, env, info, amount),
+        ExecuteMsg::Borrow { amount } => borrow(deps, env, info, amount),
 
     }
 }
@@ -90,13 +89,18 @@ pub fn execute_receive(
     let api = deps.api;
     if info.sender == state.atom_contract {
         match msg {
-            ReceiveMsg::Deposit { orderer, .. } => deposit_collateral(deps, env, info, orderer, wrapper.amount),
+            ReceiveMsg::Deposit { orderer } => deposit_collateral(deps, env, info, orderer, wrapper.amount),
             _ => Err(StdError::generic_err("Invalid operation for atom contract")),
         }
     } else if info.sender == state.usdc_contract {
         match msg {
-            ReceiveMsg::Repay { orderer, .. } => repay_loan(deps, env, info, orderer, wrapper.amount),
+            ReceiveMsg::Repay { orderer } => repay_loan(deps, env, info, orderer, wrapper.amount),
             _ => Err(StdError::generic_err("Invalid operation for USDC contract")),
+        }
+    } else if info.sender == state.fyusdc_contract {
+        match msg {
+            ReceiveMsg::Redeem { orderer } => try_withdraw_usdc(deps, env, info, orderer, wrapper.amount),
+            _ => Err(StdError::generic_err("Invalid operation for fyUSDC contract")),
         }
     } else {
         match msg {
@@ -130,11 +134,10 @@ fn deposit_collateral(
 
 
     // Return a successful response
-    Ok(Response::new().add_attributes(vec![
-        Attribute::new("action", "deposit_collateral"),
-        Attribute::new("sender", orderer),
-        Attribute::new("collateral_amount", amount),
-    ]))
+    Ok(Response::new()
+        .add_attribute("action", "deposit_collateral")
+        .add_attribute("sender", &orderer.to_string())
+        .add_attribute("collateral_amount", &amount.to_string()))
 }
 
 
@@ -188,14 +191,12 @@ pub fn withdraw_collateral(
 
     Ok(Response::new()
         .add_message(cosmos_msg)
-        .add_attributes(vec![
-            Attribute::new("action", "withdraw_collateral"),
-            Attribute::new("sender", info.sender),
-            Attribute::new("collateral_amount", amount),
-        ]))
+        .add_attribute("action", "withdraw_collateral")
+        .add_attribute("sender", &info.sender.to_string())
+        .add_attribute("collateral_amount", &amount.to_string()))
 }
 
-fn borrow(
+pub fn borrow(
     deps: DepsMut,
     _env: Env,
     info: MessageInfo,
@@ -256,7 +257,7 @@ fn repay_loan(
     amount: Uint128,
 ) -> Result<Response, StdError> {
     // Load user's loan from storage
-    let mut collateral = COLLATERALS.load(deps.storage, &orderer)?;
+    let collateral = COLLATERALS.load(deps.storage, &orderer)?;
     let mut loan = LOANS.load(deps.storage, &orderer)?;
     let state = STATE.load(deps.storage)?;
 
@@ -285,6 +286,61 @@ fn repay_loan(
         .add_attribute("action", "repay_loan")
     )
 }
+
+fn try_withdraw_usdc(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    orderer: Addr,
+    token_amount: Uint128,
+) -> StdResult<Response> {
+    // Verify if the current block time is past the liquidation deadline
+    let state = STATE.load(deps.storage)?;
+
+    if env.block.time.seconds() < state.liquidation_deadline {
+        return Err(StdError::generic_err("Withdrawal is not allowed before the liquidation deadline"));
+    }
+
+    // Check the contract's USDC balance to ensure it has enough tokens to cover the withdrawal
+    let usdc_balance = CONTRACT_USDC_BALANCE.load(deps.storage)?;
+    if usdc_balance < token_amount {
+        return Err(StdError::generic_err("Not enough USDC tokens in the contract to cover the withdrawal"));
+    }
+
+    // Update the contract's USDC balance
+    CONTRACT_USDC_BALANCE.save(deps.storage, &(usdc_balance - token_amount))?;
+
+
+    // Send USDC tokens to the user
+    let usdc_contract_address = state.usdc_contract.to_string();
+    let cw20_msg = Cw20ExecuteMsg::Transfer {
+        recipient: info.sender.to_string(),
+        amount: token_amount,
+    };
+    let cosmos_msg = CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: usdc_contract_address,
+        msg: to_binary(&cw20_msg)?,
+        funds: vec![],
+    });
+
+    // Burn the fyUSDC tokens
+    let fyusdc_contract_address = state.fyusdc_contract.to_string();
+    let cw20_burn_msg = Cw20ExecuteMsg::Burn {
+        amount: token_amount,
+    };
+    let cosmos_burn_msg = CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: fyusdc_contract_address,
+        msg: to_binary(&cw20_burn_msg)?,
+        funds: vec![],
+    });
+
+    Ok(Response::new()
+        .add_message(cosmos_msg)
+        .add_message(cosmos_burn_msg)
+        .add_attribute("action", "withdraw_usdc"))
+}
+
+
 
 
 pub fn execute_create(

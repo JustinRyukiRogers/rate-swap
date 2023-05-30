@@ -10,24 +10,20 @@ use cw_storage_plus::Item;
 use std::collections::HashMap;
 
 
-use cw20::{Balance, Cw20CoinVerified, Expiration};
+use cw20::{Balance, Cw20CoinVerified};
 
 
 // State of the contract
 #[cw_serde]
 pub struct State {
     pub contract_owner: Addr,
-    pub authorized_checker: Addr,
-    pub liquidation_deadline: Expiration,
+    pub liquidation_deadline: u64, // use unix timestamp
     pub liquidator: Addr,
-    pub order_manager_contract: Addr,
     pub liquidation_threshold: Decimal,
     pub liquidation_penalty: Decimal,
     pub fyusdc_contract: Addr,
     pub usdc_contract: Addr,
-    pub rsp_contract: Addr,
     pub atom_contract: Addr,
-
 }
 
 impl State {
@@ -36,7 +32,7 @@ impl State {
         &mut self,
         caller: &Addr,
         new_authorized_checker: Option<Addr>,
-        new_liquidation_deadline: Option<Expiration>,
+        new_liquidation_deadline: Option<u64>, // use unix timestamp
         new_liquidator: Option<Addr>,
         new_order_manager_contract: Option<Addr>,
         new_liquidation_threshold: Option<Decimal>,
@@ -46,17 +42,11 @@ impl State {
         if caller != &self.contract_owner {
             return Err(StdError::generic_err("Unauthorized"));  
         }
-        if let Some(checker) = new_authorized_checker {
-            self.authorized_checker = checker;
-        }
         if let Some(deadline) = new_liquidation_deadline {
             self.liquidation_deadline = deadline;
         }
         if let Some(liquidator) = new_liquidator {
             self.liquidator = liquidator;
-        }
-        if let Some(manager) = new_order_manager_contract {
-            self.order_manager_contract = manager;
         }
         if let Some(threshold) = new_liquidation_threshold {
             self.liquidation_threshold = threshold;
