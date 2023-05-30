@@ -93,6 +93,11 @@ pub fn execute_receive(
             ReceiveMsg::Deposit { orderer, .. } => deposit_collateral(deps, env, info, orderer, wrapper.amount),
             _ => Err(StdError::generic_err("Invalid operation for atom contract")),
         }
+    } else if info.sender == state.usdc_contract {
+        match msg {
+            ReceiveMsg::Repay { orderer, .. } => repay_loan(deps, env, info, orderer, wrapper.amount),
+            _ => Err(StdError::generic_err("Invalid operation for USDC contract")),
+        }
     } else {
         match msg {
             ReceiveMsg::Create(msg) => {
@@ -103,6 +108,7 @@ pub fn execute_receive(
         }
     }
 }
+
 
 
 fn deposit_collateral(
@@ -189,7 +195,96 @@ pub fn withdraw_collateral(
         ]))
 }
 
+fn borrow(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+    amount: Uint128,
+) -> Result<Response, StdError> {
+    // Load user's collateral and loan from storage
+    let mut collateral = COLLATERALS.load(deps.storage, &info.sender)?;
+    let mut loan = LOANS.load(deps.storage, &info.sender)?;
 
+    // Load the state
+    let state = STATE.load(deps.storage)?;
+
+    // Query prices for USDC and ATOM
+    let prices_response = query_prices(deps.as_ref())?;
+
+    // Convert loan balance and collateral balance to USD value
+    let collateral_balance_usd = collateral * prices_response.atom;
+
+    // Calculate the maximum amount the user can borrow
+    let max_borrow = collateral_balance_usd * Uint128::new(50) / Uint128::new(100);
+
+    // Check if the user can borrow the requested amount
+    if loan + amount > max_borrow {
+        return Err(StdError::generic_err("Insufficient collateral to borrow this amount"));
+    }
+
+    // Add the borrowed amount to the user's loan
+    loan += amount;
+
+    //Mint borrower amount number of fyUSDC * fyUSDC price, which we need to get from the order book
+    // Mint the amount of fyUSDC tokens to the user
+    let fyusdc_contract_address = state.fyusdc_contract.to_string();
+    let cw20_msg = Cw20ExecuteMsg::Mint {
+        recipient: info.sender.to_string(),
+        amount,
+    };
+    let cosmos_msg = CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: fyusdc_contract_address.to_string(),
+        msg: to_binary(&cw20_msg)?,
+        funds: vec![],
+    });
+    // Save the updated loan amount to storage
+    LOANS.save(deps.storage, &info.sender, &loan)?;
+
+
+    // Return a successful response
+    Ok(Response::new()
+        .add_message(cosmos_msg)
+        .add_attribute("action", "borrow"))
+}
+
+
+fn repay_loan(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    orderer: Addr,
+    amount: Uint128,
+) -> Result<Response, StdError> {
+    // Load user's loan from storage
+    let mut collateral = COLLATERALS.load(deps.storage, &orderer)?;
+    let mut loan = LOANS.load(deps.storage, &orderer)?;
+    let state = STATE.load(deps.storage)?;
+
+    // Check if the user has a loan to repay
+    if loan.is_zero() {
+        return Err(StdError::generic_err("No outstanding loan to repay"));
+    }
+
+    // Subtract the repaid amount from the user's loan
+    if amount >= loan {
+        // If the repaid amount is greater or equal to the outstanding loan, set the loan to zero
+        loan = Uint128::zero();
+    } else {
+        // Otherwise, subtract the repaid amount from the loan
+        loan -= amount;
+    }
+
+     // Save the updated loan amount to storage
+    LOANS.save(deps.storage, &info.sender, &loan)?;
+
+    //Save the repaid amount in the contract's storage
+    let contract_usdc_balance = CONTRACT_USDC_BALANCE.load(deps.storage)?;
+    CONTRACT_USDC_BALANCE.save(deps.storage, &(contract_usdc_balance + amount))?;
+
+    Ok(Response::new()
+        .add_attribute("action", "repay_loan")
+    )
+}
 
 
 pub fn execute_create(

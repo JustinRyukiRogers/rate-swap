@@ -57,6 +57,9 @@ pub enum ReceiveMsg {
     },
     Deposit{
         orderer: Addr
+    },
+    Repay {
+        orderer: Addr
     }
 }
 
