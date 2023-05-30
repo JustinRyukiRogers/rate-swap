@@ -217,10 +217,12 @@ pub fn borrow(
     let collateral_balance_usd = collateral * prices_response.atom;
 
     // Calculate the maximum amount the user can borrow
+    let collateral_balance_usd = Decimal::from_ratio(collateral_balance_usd, Uint128::new(1));
     let max_borrow = collateral_balance_usd / state.liquidation_threshold;
+    
 
     // Check if the user can borrow the requested amount
-    if loan + amount > max_borrow {
+    if loan + amount > max_borrow.to_uint_floor() {
         return Err(StdError::generic_err("Insufficient collateral to borrow this amount"));
     }
 

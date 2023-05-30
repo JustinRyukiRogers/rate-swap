@@ -8,6 +8,6 @@
     "\\Contracts\\order_book",
     "\\Contracts\\order_book\\src"
   ],
-  "SelectedNode": "\\Contracts\\collateral_manager\\Cargo.toml",
+  "SelectedNode": "\\Contracts\\collateral_manager\\src\\contract.rs",
   "PreviewInSolutionExplorer": false
 }
