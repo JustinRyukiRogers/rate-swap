@@ -355,7 +355,7 @@ fn borrow(
     let collateral_balance_usd = collateral_balance * prices_response.atom_price;
 
     // Calculate the maximum amount the user can borrow
-    let max_borrow = collateral_balance_usd * Uint128::new(50) / Uint128::new(100);
+    let max_borrow = collateral_balance_usd / state.liquidation_threshold;
     let max_fyusdc_borrowable = max_borrow * fyUSDC_USD
 
     // Check if the user can borrow the requested amount
@@ -446,27 +446,21 @@ fn repay_loan(
         .add_attribute("action", "repay_loan")
 }
 
-
+        ExecuteMsg::Liquidate { borrower } => liquidate_collateral(deps, env, info, borrower)
 pub fn liquidate_collateral(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    borrower: String,
+    borrower: Addr,
 ) -> Result<Response, StdError> {
 
     let state = STATE.load(deps.storage)?;
-
-    if info.sender != state.authorized_checker {
-        return Err(StdError::generic_err("Unauthorized: only the authorized checker can call this function"));
-    }
-    
     let liquidator_contract_address = state.liquidator;
-    let borrower_addr = Addr::unchecked(borrower);
 
 
     // Load loan and collateral balances
-    let loan_balance = read_loan_balance(deps.storage, &borrower_addr)?;
-    let collateral_balance = read_collateral_balance(deps.storage, &borrower_addr)?;
+    let loan = LOANS.load(deps.storage, &borrower)?;
+    let collateral_balance = COLLATERAL.load(deps.storage, &borrower)?;
         
     //Liquidation amount
     let amount = loan_balance * state.liquidation_penalty;
@@ -475,8 +469,8 @@ pub fn liquidate_collateral(
     let prices_response = query_prices(deps.as_ref())?;
 
     // Convert loan balance and collateral balance to USD value
-    let loan_balance_usd = loan_balance * prices_response.usdc_price;
-    let collateral_balance_usd = collateral_balance * prices_response.atom_price;
+    let loan_balance_usd = loan_balance * prices_response.usdc;
+    let collateral_balance_usd = collateral_balance * prices_response.atom;
 
 
     // Calculate new collateral balance
@@ -492,6 +486,7 @@ pub fn liquidate_collateral(
     // Check if the new collateralization ratio is below the liquidation threshold
     if collateralization_ratio >= state.liquidation_threshold && env.block.height <= state.liquidation_deadline.at_height() {
         return Err(StdError::generic_err("LiquidationThresholdNotReached");
+    )
     }
 
     // Update the borrower's collateral balance
@@ -519,7 +514,7 @@ pub fn liquidate_collateral(
             Attribute::new("borrower", borrower),
             Attribute::new("liquidated_collateral_amount", amount.to_string()),
             Attribute::new("received_usdc_amount", usdc_amount.to_string()),
-    ])
+    ]))
 
 }
 

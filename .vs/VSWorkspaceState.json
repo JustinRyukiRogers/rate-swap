@@ -3,8 +3,11 @@
     "",
     "\\Contracts",
     "\\Contracts\\collateral_manager",
-    "\\Contracts\\collateral_manager\\src"
+    "\\Contracts\\collateral_manager\\src",
+    "\\Contracts\\fyUSDC",
+    "\\Contracts\\order_book",
+    "\\Contracts\\order_book\\src"
   ],
-  "SelectedNode": "\\Contracts\\collateral_manager\\src\\msg.rs",
+  "SelectedNode": "\\Contracts\\collateral_manager\\Cargo.toml",
   "PreviewInSolutionExplorer": false
 }
