@@ -612,7 +612,7 @@ pub fn query_user_orders(deps: Deps, user: Addr) -> StdResult<UserOrdersResponse
         let (_price, bucket) = result?;
         // Check each order in the bids and asks
         for order in bucket.bids.iter().chain(bucket.asks.iter()) {
-            if order.owner == user {
+            if order.orderer == user {
                 user_orders.push(order.clone());
             }
         }
@@ -669,7 +669,19 @@ fn query_list(deps: Deps) -> StdResult<ListResponse> {
     })
 }
 
+pub fn generate_order_id(deps: &mut DepsMut<'_>) -> StdResult<String> {
+    // Load the state.
+    let mut state = STATE.load(deps.storage)?;
 
+    // Increment the max_order_id.
+    state.max_order_id += 1;
+
+    // Save the new state.
+    STATE.save(deps.storage, &state)?;
+
+    // Return the new order ID as a string.
+    Ok(format!("{}", state.max_order_id))
+}
 
 #[cfg(test)]
 mod tests {

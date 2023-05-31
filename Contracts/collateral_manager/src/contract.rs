@@ -689,65 +689,57 @@ fn query_list(deps: Deps) -> StdResult<ListResponse> {
 }
 
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-    use cosmwasm_std::{coins, Addr, CosmosMsg, Decimal, Uint128, WasmMsg};
+    use cosmwasm_std::{coins, from_binary, Decimal, Uint128};
+    use crate::msg::InstantiateMsg;
+    use std::str::FromStr;
+
+    // test helpers
+    fn setup_contract() -> (OwnedDeps<MockStorage, MockApi, MockQuerier>, MessageInfo) {
+        let mut deps = mock_dependencies(&[]);
+        let msg = InstantiateMsg {
+            liquidation_deadline: 1000u64,
+            liquidator: Addr::unchecked("liquidator"),
+            fyusdc_contract: Addr::unchecked("fyusdc"),
+            usdc_contract: Addr::unchecked("usdc"),
+            liquidation_threshold: Decimal::from_str("0.8").unwrap(),
+            liquidation_penalty: Decimal::from_str("0.1").unwrap(),
+            atom_contract: Addr::unchecked("atom"),
+        };
+        let info = mock_info("creator", &coins(1000, "earth"));
+        let _res = instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
+        (deps, info)
+    }
 
     #[test]
-    fn test_execute_receive() {
-        let mut deps = mock_dependencies();
-
-        // Initialize the state
-        let usdc_contract = "usdc_contract".to_string();
-        let fyusdc_contract = "fyusdc_contract".to_string();
-
-        let state = State {
-            fyusdc_contract: Addr::unchecked(fyusdc_contract.clone()),
-            usdc_contract: Addr::unchecked(usdc_contract.clone()),
-            max_order_id: 0,
-        };
-
-        STATE.save(&mut deps.storage, &state).unwrap();
-
+    fn test_deposit_collateral() {
+        let (mut deps, info) = setup_contract();
         let env = mock_env();
-        let info = mock_info(&fyusdc_contract, &coins(250, "usdc"));
-
-        let msg = Cw20ReceiveMsg {
-            sender: info.sender.clone().into_string(),
-            amount: Uint128::new(250),
-            msg: to_binary(&ReceiveMsg::CreateAsk { 
-                quantity: Uint128::new(500), 
-                price: Decimal::percent(50) 
-            }).unwrap(),
-        };
-
-        // Execute the contract
-        let _res = execute_receive(deps.as_mut(), env.clone(), info.clone(), msg.clone()).unwrap();
+        let amount = Uint128::from(1000u128);
+        let res = deposit_collateral(deps.as_mut(), env, info.clone(), info.sender.clone(), amount).unwrap();
         
-        // Let's check if the sender is being recognized correctly
-        let updated_state = STATE.load(deps.as_ref().storage).unwrap();
-        assert_eq!(updated_state.fyusdc_contract, info.sender);
-        assert_eq!(updated_state.usdc_contract, Addr::unchecked(usdc_contract));
+        // Check that the attribute "action" is "deposit_collateral"
+        assert_eq!(res.attributes[0].key, "action");
+        assert_eq!(res.attributes[0].value, "deposit_collateral");
 
-        // Now let's attempt to call `execute_receive` with a different sender
-        let different_sender_info = mock_info("another_contract", &coins(250, "usdc"));
-        let different_sender_msg = Cw20ReceiveMsg {
-            sender: different_sender_info.sender.clone().into_string(),
-            amount: Uint128::new(250),
-            msg: to_binary(&ReceiveMsg::CreateAsk { 
-                quantity: Uint128::new(500), 
-                price: Decimal::percent(50) 
-            }).unwrap(),
-        };
+        // Check that the attribute "sender" is correct
+        assert_eq!(res.attributes[1].key, "sender");
+        assert_eq!(res.attributes[1].value, info.sender.to_string());
 
-        let different_sender_res = execute_receive(deps.as_mut(), env, different_sender_info, different_sender_msg);
-        assert!(different_sender_res.is_err(), "Should fail due to invalid sender");
+        // Check that the attribute "collateral_amount" is correct
+        assert_eq!(res.attributes[2].key, "collateral_amount");
+        assert_eq!(res.attributes[2].value, amount.to_string());
+
+        // Check that the user's collateral was updated in storage
+        let collateral = COLLATERALS.load(deps.as_ref().storage, &info.sender).unwrap();
+        assert_eq!(collateral, amount);
     }
 }
+
+
 
 
 
